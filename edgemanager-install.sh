@@ -29,7 +29,6 @@ FILE=""
 OFFLINE_PROVISION=false
 REPOAUTH=""
 INSTALL_DOCKER=false
-NO_FRP=false
 VER="3.1.0.dev"
 
 UBUNTU2204="Ubuntu 22.04"
@@ -564,7 +563,6 @@ display_usage()
   echo "     -f, --file               : Absolute path to local package" >&3
   echo "     --offline-provision      : Enable offline node provision" >&3
   echo "     --install-docker         : Install docker as part of package install" >&3
-  echo "     --no-frp                 : Do not enable FRP tunnels as part of package install" >&3
 }
 
 ## Main starts here: ##
@@ -595,10 +593,6 @@ while [ "$1" != "" ]; do
             ;;
         --install-docker)
             INSTALL_DOCKER=true
-            shift
-            ;;
-        --no-frp)
-            NO_FRP=true
             shift
             ;;
         *)
@@ -647,9 +641,6 @@ fi
 
 # Detect Arch
 ARCH="$(uname -m)"
-
-# Set the FRP flag to enable/disable tunneling on the node (em-node script will lookup this env variable)
-export NO_FRP
 
 # Check compatibility
 log "Checking compatibility"  >&3
