@@ -326,7 +326,7 @@ install_node()
   fi
 
   # Load alpine docker image
-  docker load -i /opt/edgemanager/node/alpine_3_19_1.tar
+  docker load -i /opt/edgebuilder/node/alpine_3_19_1.tar
 
   show_progress 45
 
