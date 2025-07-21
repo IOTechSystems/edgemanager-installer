@@ -278,6 +278,15 @@ install_node()
 
   show_progress 2
 
+  # The new EM Agent 'iotech-builderd-1.2' depends on 'iotech-libpaho-mqtt-1.3'.
+  # Previous versions (from v3.0.6 and backwards) of EM Agent 'iotech-builderd-1.2' depends on 'libpaho-mqtt-1.3'.
+  # Both packages 'libpaho-mqtt-1.3' and 'iotech-libpaho-mqtt-1.3' share some files, therefore remove 'libpaho-mqtt-1.3'
+  # to ensure the new agent satisfies its dependencies
+  if dpkg -s libpaho-mqtt-1.3 | grep -qw Status.*installed ;then
+      log "Removing libpaho-mqtt-1.3" >&3
+      sudo apt remove -y libpaho-mqtt-1.3
+  fi
+
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
   apt-get install -y -qq wget ca-certificates curl gnupg lsb-release
