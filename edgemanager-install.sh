@@ -33,10 +33,8 @@ VER=VER="3.1.0".dev
 
 UBUNTU2404="Ubuntu 24.04"
 UBUNTU2204="Ubuntu 22.04"
-DEBIAN10="Debian GNU/Linux 10"
 DEBIAN11="Debian GNU/Linux 11"
 DEBIAN12="Debian GNU/Linux 12"
-RASPBIAN10="Raspbian GNU/Linux 10"
 
 # docker/compose supported versions
 DOCKER_VERSION="25.0.3"
@@ -79,8 +77,6 @@ get_dist_name()
     echo "bookworm"
   elif  [ "$1" = "$DEBIAN11" ]; then
     echo "bullseye"
-  elif  [ "$1" = "$DEBIAN10" ] || [ "$1" = "$RASPBIAN10" ]; then
-    echo "buster"
   fi
 }
 
@@ -91,8 +87,6 @@ get_dist_num()
     echo "24.04"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "22.04"
-  elif  [ "$1" = "$DEBIAN10" ] || [ "$1" = "$RASPBIAN10" ]; then
-    echo "10"
   elif  [ "$1" = "$DEBIAN11" ]; then
     echo "11"
   elif  [ "$1" = "$DEBIAN12" ]; then
@@ -105,10 +99,9 @@ get_dist_type()
 {
   if [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
     echo "ubuntu"
-  elif  [ "$1" = "$DEBIAN10" ] || [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
+  elif  [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
     echo "debian"
   fi
-
 }
 
 # Get the dist mapping
@@ -664,7 +657,7 @@ if [ "$COMPONENT" = "server" ];then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN10" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_server "$OS"
     else
       log "The Edge Manager server components are not supported on $OS - $ARCH"  >&3
@@ -679,7 +672,7 @@ elif [ "$COMPONENT" = "node" ]; then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ]||[ "$ARCH" = "armv7l" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN10" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_node "$OS" "$ARCH"
     else
       log "Edge Manager node components are not supported on $OS - $ARCH"  >&3
