@@ -29,15 +29,12 @@ FILE=""
 OFFLINE_PROVISION=false
 REPOAUTH=""
 INSTALL_DOCKER=false
-VER="3.1.0.dev"
+VER="3.2.0.dev"
 
 UBUNTU2404="Ubuntu 24.04"
 UBUNTU2204="Ubuntu 22.04"
-UBUNTU2004="Ubuntu 20.04"
-DEBIAN10="Debian GNU/Linux 10"
 DEBIAN11="Debian GNU/Linux 11"
 DEBIAN12="Debian GNU/Linux 12"
-RASPBIAN10="Raspbian GNU/Linux 10"
 
 # docker/compose supported versions
 DOCKER_VERSION="25.0.3"
@@ -76,14 +73,10 @@ get_dist_name()
     echo "noble"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "jammy"
-  elif [ "$1" = "$UBUNTU2004" ]; then
-    echo "focal"
   elif  [ "$1" = "$DEBIAN12" ]; then
     echo "bookworm"
   elif  [ "$1" = "$DEBIAN11" ]; then
     echo "bullseye"
-  elif  [ "$1" = "$DEBIAN10" ] || [ "$1" = "$RASPBIAN10" ]; then
-    echo "buster"
   fi
 }
 
@@ -94,10 +87,6 @@ get_dist_num()
     echo "24.04"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "22.04"
-  elif [ "$1" = "$UBUNTU2004" ]; then
-    echo "20.04"
-  elif  [ "$1" = "$DEBIAN10" ] || [ "$1" = "$RASPBIAN10" ]; then
-    echo "10"
   elif  [ "$1" = "$DEBIAN11" ]; then
     echo "11"
   elif  [ "$1" = "$DEBIAN12" ]; then
@@ -108,12 +97,11 @@ get_dist_num()
 # Gets the basic distribution type ubuntu, debian etc
 get_dist_type()
 {
-  if [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ] || [ "$1" = "$UBUNTU2004" ]; then
+  if [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
     echo "ubuntu"
-  elif  [ "$1" = "$DEBIAN10" ] || [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
+  elif  [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
     echo "debian"
   fi
-
 }
 
 # Get the dist mapping
@@ -277,6 +265,15 @@ install_node()
   fi
 
   show_progress 2
+
+  # The new EM Agent 'iotech-builderd-1.2' depends on 'iotech-libpaho-mqtt-1.3'.
+  # Previous versions (from v3.0.6 and backwards) of EM Agent 'iotech-builderd-1.2' depends on 'libpaho-mqtt-1.3'.
+  # Both packages 'libpaho-mqtt-1.3' and 'iotech-libpaho-mqtt-1.3' share some files, therefore remove 'libpaho-mqtt-1.3'
+  # to ensure the new agent satisfies its dependencies
+  if dpkg -s libpaho-mqtt-1.3 | grep -qw Status.*installed ;then
+      log "Removing libpaho-mqtt-1.3" >&3
+      sudo apt remove -y libpaho-mqtt-1.3
+  fi
 
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
@@ -660,7 +657,7 @@ if [ "$COMPONENT" = "server" ];then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ];then
-    if [ "$OS" = "$UBUNTU2004" ]||[ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN10" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_server "$OS"
     else
       log "The Edge Manager server components are not supported on $OS - $ARCH"  >&3
@@ -675,7 +672,7 @@ elif [ "$COMPONENT" = "node" ]; then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ]||[ "$ARCH" = "armv7l" ];then
-    if [ "$OS" = "$UBUNTU2004" ]||[ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN10" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_node "$OS" "$ARCH"
     else
       log "Edge Manager node components are not supported on $OS - $ARCH"  >&3
