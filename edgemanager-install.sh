@@ -130,18 +130,18 @@ check_docker_and_compose()
     exit 1
   fi
 
-# Check docker/compose version
-current_docker_version=$(docker version | sed -n '2p' | awk '{print $2}')
-current_compose_version=$(docker compose version | awk '{print $4}' | sed 's/+.*//' | tr -d 'v')
-COMPOSE_VERSION_CLEAN=$(echo "$COMPOSE_VERSION" | tr -d 'v')
+  # Check docker/compose version
+  current_docker_version=$(docker version | sed -n '2p' | awk '{print $2}')
+  current_compose_version=$(docker compose version | awk '{print $4}' | sed 's/+.*//' | tr -d 'v')
+  COMPOSE_VERSION_CLEAN=$(echo "$COMPOSE_VERSION" | tr -d 'v')
 
-if [ $(echo "$current_docker_version" "$DOCKER_VERSION" | tr " " "\n" | sort | sed -n '1p') != "$DOCKER_VERSION" ]; then
-  log "Docker version "$current_docker_version" is not supported, please install docker version "$DOCKER_VERSION" (or later), for details see: https://docs.docker.com/engine/install/" >&3
-  exit 2
-elif [ $(printf '%s\n' "$current_compose_version" "$COMPOSE_VERSION_CLEAN" | sort -V | head -n1) != "$COMPOSE_VERSION_CLEAN" ]; then
-  log "Docker compose version "$current_compose_version" is not supported, please install docker compose version "$COMPOSE_VERSION" (or later), for details see: https://docs.docker.com/engine/install/" >&3
-  exit 3
-fi
+  if [ $(echo "$current_docker_version" "$DOCKER_VERSION" | tr " " "\n" | sort | sed -n '1p') != "$DOCKER_VERSION" ]; then
+    log "Docker version "$current_docker_version" is not supported, please install docker version "$DOCKER_VERSION" (or later), for details see: https://docs.docker.com/engine/install/" >&3
+    exit 2
+  elif [ $(printf '%s\n' "$current_compose_version" "$COMPOSE_VERSION_CLEAN" | sort -V | head -n1) != "$COMPOSE_VERSION_CLEAN" ]; then
+    log "Docker compose version "$current_compose_version" is not supported, please install docker compose version "$COMPOSE_VERSION" (or later), for details see: https://docs.docker.com/engine/install/" >&3
+    exit 3
+  fi
 }
 
 # Holds package updates, prevents upgrades via apt-get update/upgrade
