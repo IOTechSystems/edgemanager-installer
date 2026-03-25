@@ -327,7 +327,7 @@ install_node()
   # Load alpine docker image
   docker load -i /opt/edgebuilder/node/alpine_3_19_1.tar
 
-  show_progress 45
+  show_progress 40
 
   # enable em-node service for offline node provision
   if [ "$OFFLINE_PROVISION" ]; then
@@ -494,10 +494,10 @@ uninstall_server()
     # check if edgemanager-server is currently installed
     if dpkg -s edgemanager-server; then
         em-server down -rv
-        show_progress 45
         unhold_package_updates_deb "edgemanager-server"
         # attempt purge
         sudo apt-get -qq purge edgemanager-server -y
+        show_progress 40
         if  ! (dpkg --list edgemanager-server);then
             log "Successfully uninstalled Server Components" >&3
             exit 0
@@ -545,7 +545,7 @@ uninstall_cli()
       if dpkg -s edgemanager-cli; then
           unhold_package_updates_deb "edgemanager-cli"
           sudo apt-get -qq purge edgemanager-cli -y
-          show_progress 45
+          show_progress 40
           if (dpkg --list edgemanager-cli) ; then
               log "Failed to uninstall CLI" >&3
               exit 1
@@ -554,7 +554,7 @@ uninstall_cli()
               exit 0
           fi
       else
-          show_progress 45
+          show_progress 40
           # package not currently installed, so exit
           log "CLI NOT currently installed" >&3
           exit 0
