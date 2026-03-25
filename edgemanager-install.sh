@@ -493,7 +493,7 @@ uninstall_server()
     show_progress 1
     # check if edgemanager-server is currently installed
     if dpkg -s edgemanager-server; then
-        em-server down -v
+        em-server down -rv
         show_progress 45
         unhold_package_updates_deb "edgemanager-server"
         # attempt purge
