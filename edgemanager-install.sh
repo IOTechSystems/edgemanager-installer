@@ -522,7 +522,7 @@ uninstall_node()
       em-node down
       unhold_package_updates_deb "edgemanager-node"
       show_progress 40
-      apt-get -qq purge edgemanager-node iotech-builderd-1.2 -y
+      apt-get -qq purge edgemanager-node iotech-builderd-* -y
       if ! (dpkg --list edgemanager-node) ; then
           log "Successfully uninstalled Node Components" >&3
           exit 0
