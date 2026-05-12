@@ -279,7 +279,7 @@ install_node()
 
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq wget ca-certificates curl gnupg lsb-release
+  apt-get install -y -qq wget ca-certificates curl gnupg lsb-release gettext-base
 
   show_progress 5
 
