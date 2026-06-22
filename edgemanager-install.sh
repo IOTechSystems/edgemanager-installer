@@ -265,7 +265,7 @@ install_node()
         log "WARNING: em-node is already installed ($PKG_VER) and builderd is running. This node may already be connected to an instance of EdgeManager." >&3
         if [ "$FORCE_YES" != "true" ]; then
           printf "Would you still like to proceed? [Y/N]: " >&3
-          read -r ANSWER
+          read -r ANSWER </dev/tty
           case "$ANSWER" in
             [Yy]*) ;;
             *)
