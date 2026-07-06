@@ -341,7 +341,7 @@ install_node()
   show_progress 40
 
   # enable em-node service for offline node provision
-  if [ "$OFFLINE_PROVISION" ]; then
+  if [ "$OFFLINE_PROVISION" = "true" ]; then
     systemctl enable --now em-node.service
   fi
 
