@@ -330,7 +330,7 @@ install_node()
   show_progress 40
 
   # enable em-node service for offline node provision
-  if [ "$OFFLINE_PROVISION" ]; then
+  if [ "$OFFLINE_PROVISION" = true ]; then
     systemctl enable --now em-node.service
   fi
 
@@ -361,7 +361,7 @@ install_cli_deb()
   if dpkg -l | grep -qw edgemanager-cli ;then
     # shellcheck disable=SC2062
     if dpkg -s edgemanager-cli | grep -qw Status.*installed ;then
-      PKG_VER=$(dpkg -s edgemanager-node | grep -i version)
+      PKG_VER=$(dpkg -s edgemanager-cli | grep -i version)
       show_progress 40
       log "CLI ($PKG_VER) already installed, exiting"  >&3
       exit 0
@@ -379,11 +379,8 @@ install_cli_deb()
   apt-get update -qq
   apt-get install -y -qq wget ca-certificates curl gnupg lsb-release
   show_progress 15
-  # check if using local file for dev purposes
-  if test -f "$FILE" ; then
-    apt-get update -qq
-    apt-get install -y "$FILE"
-  else
+  # check if using local file for dev purposes; skip repo setup if so, the install block below handles it
+  if ! test -f "$FILE" ; then
     wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
     if [ "$REPOAUTH" != "" ]; then
       if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" /etc/apt/sources.list.d/em-iotech-cli.list ;then
@@ -520,6 +517,7 @@ uninstall_node()
    if dpkg -s edgemanager-node; then
       show_progress 20
       em-node down
+      systemctl disable --now em-node.service
       unhold_package_updates_deb "edgemanager-node"
       show_progress 40
       apt-get -qq purge edgemanager-node iotech-builderd-* -y
