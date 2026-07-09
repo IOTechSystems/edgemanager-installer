@@ -184,8 +184,12 @@ install_server()
     # shellcheck disable=SC2062
     if dpkg -s edgemanager-server | grep -qw Status.*installed ;then
       PKG_VER=$(dpkg -s edgemanager-server | grep -i version)
-       show_progress 40
-      log "Server ($PKG_VER) already installed, exiting" >&3
+      log "Server ($PKG_VER) already installed" >&3
+      if [ "$INSTALL_DOCKER" = "true" ]; then
+        check_docker_and_compose
+      fi
+      show_progress 40
+      log "Exiting" >&3
       exit 0
     fi
   fi
@@ -204,6 +208,7 @@ install_server()
   check_docker_and_compose
 
   show_progress 18
+  unhold_package_updates_deb "edgemanager-server"
   if test -f "$FILE" ; then
     apt-get update -qq
     apt-get install -y "$FILE"
@@ -260,8 +265,12 @@ install_node()
     # shellcheck disable=SC2062
     if dpkg -s edgemanager-node | grep -qw Status.*installed ;then
       PKG_VER=$(dpkg -s edgemanager-node | grep -i version)
+      log "Node Components ($PKG_VER) already installed" >&3
+      if [ "$INSTALL_DOCKER" = "true" ]; then
+        check_docker_and_compose
+      fi
       show_progress 40
-      log "Node Components ($PKG_VER) already installed, exiting" >&3
+      log "Exiting" >&3
       exit 0
     fi
   fi
@@ -304,6 +313,8 @@ install_node()
   fi
 
   show_progress 28
+
+  unhold_package_updates_deb "edgemanager-node"
 
   # check if using local file for dev purposes
   echo "FILE = ${FILE}"
