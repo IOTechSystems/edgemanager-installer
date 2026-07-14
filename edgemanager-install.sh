@@ -284,6 +284,7 @@ install_node()
               ;;
           esac
         fi
+      fi
       log "Node Components ($PKG_VER) already installed" >&3
       if [ "$INSTALL_DOCKER" = "true" ]; then
         check_docker_and_compose
