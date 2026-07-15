@@ -29,6 +29,8 @@ FILE=""
 OFFLINE_PROVISION=false
 REPOAUTH=""
 INSTALL_DOCKER=false
+
+FORCE_YES=false
 VER="3.2.4.dev"
 
 UBUNTU2404="Ubuntu 24.04"
@@ -265,6 +267,24 @@ install_node()
     # shellcheck disable=SC2062
     if dpkg -s edgemanager-node | grep -qw Status.*installed ;then
       PKG_VER=$(dpkg -s edgemanager-node | grep -i version)
+      if systemctl is-active --quiet builderd; then
+        log "WARNING: em-node is already installed ($PKG_VER) and builderd is running. This node may already be connected to an instance of EdgeManager." >&3
+        if [ "$FORCE_YES" != "true" ]; then
+          printf "Would you still like to proceed? [Y/N]: " >&3
+          if [ -c /dev/tty ]; then
+            read -r ANSWER </dev/tty
+          else
+            ANSWER="Y"
+          fi
+          case "$ANSWER" in
+            [Yy]*) ;;
+            *)
+              log "Installation aborted." >&3
+              exit 1
+              ;;
+          esac
+        fi
+      fi
       log "Node Components ($PKG_VER) already installed" >&3
       if [ "$INSTALL_DOCKER" = "true" ]; then
         check_docker_and_compose
@@ -581,6 +601,7 @@ display_usage()
   echo "     -f, --file               : Absolute path to local package" >&3
   echo "     --offline-provision      : Enable offline node provision" >&3
   echo "     --install-docker         : Install docker as part of package install" >&3
+  echo "     -y, --yes                : Automatically proceed without interactive prompts" >&3
 }
 
 ## Main starts here: ##
@@ -611,6 +632,10 @@ while [ "$1" != "" ]; do
             ;;
         --install-docker)
             INSTALL_DOCKER=true
+            shift
+            ;;
+        -y | --yes)
+            FORCE_YES=true
             shift
             ;;
         *)
