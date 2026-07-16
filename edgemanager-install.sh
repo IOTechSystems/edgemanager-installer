@@ -33,6 +33,7 @@ INSTALL_DOCKER=false
 FORCE_YES=false
 VER="3.2.4.dev"
 
+UBUNTU2604="Ubuntu 26.04"
 UBUNTU2404="Ubuntu 24.04"
 UBUNTU2204="Ubuntu 22.04"
 DEBIAN11="Debian GNU/Linux 11"
@@ -71,7 +72,9 @@ version_under_2_6_32(){
 # Gets the distribution 'name' bionic, focal etc
 get_dist_name()
 {
-  if [ "$1" = "$UBUNTU2404" ]; then
+  if [ "$1" = "$UBUNTU2604" ]; then
+    echo "resolute"
+  elif [ "$1" = "$UBUNTU2404" ]; then
     echo "noble"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "jammy"
@@ -85,7 +88,9 @@ get_dist_name()
 # Gets the distribution number 20.04, 22.04 etc
 get_dist_num()
 {
-  if [ "$1" = "$UBUNTU2404" ]; then
+  if [ "$1" = "$UBUNTU2604" ]; then
+    echo "26.04"
+  elif [ "$1" = "$UBUNTU2404" ]; then
     echo "24.04"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "22.04"
@@ -99,7 +104,7 @@ get_dist_num()
 # Gets the basic distribution type ubuntu, debian etc
 get_dist_type()
 {
-  if [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
+  if [ "$1" = "$UBUNTU2604" ] || [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
     echo "ubuntu"
   elif  [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
     echo "debian"
@@ -123,7 +128,9 @@ check_docker_and_compose()
   # Install docker if requested
   if [ "$INSTALL_DOCKER" = "true" ]; then
     curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh ./get-docker.sh
+    # No sudo here: this script already requires root (checked at startup), and an extra
+    # sudo layer adds a redundant use_pty session that newer sudo versions can freeze on
+    sh ./get-docker.sh
   fi
 
   # Check if the docker is installed and running
@@ -693,7 +700,7 @@ if [ "$COMPONENT" = "server" ];then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_server "$OS"
     else
       log "The Edge Manager server components are not supported on $OS - $ARCH"  >&3
@@ -708,7 +715,7 @@ elif [ "$COMPONENT" = "node" ]; then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ]||[ "$ARCH" = "armv7l" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_node "$OS" "$ARCH"
     else
       log "Edge Manager node components are not supported on $OS - $ARCH"  >&3
