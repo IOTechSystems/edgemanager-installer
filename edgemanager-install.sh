@@ -33,6 +33,7 @@ INSTALL_DOCKER=false
 FORCE_YES=false
 VER="3.2.4.dev"
 
+UBUNTU2604="Ubuntu 26.04"
 UBUNTU2404="Ubuntu 24.04"
 UBUNTU2204="Ubuntu 22.04"
 DEBIAN11="Debian GNU/Linux 11"
@@ -71,7 +72,9 @@ version_under_2_6_32(){
 # Gets the distribution 'name' bionic, focal etc
 get_dist_name()
 {
-  if [ "$1" = "$UBUNTU2404" ]; then
+  if [ "$1" = "$UBUNTU2604" ]; then
+    echo "resolute"
+  elif [ "$1" = "$UBUNTU2404" ]; then
     echo "noble"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "jammy"
@@ -85,7 +88,9 @@ get_dist_name()
 # Gets the distribution number 20.04, 22.04 etc
 get_dist_num()
 {
-  if [ "$1" = "$UBUNTU2404" ]; then
+  if [ "$1" = "$UBUNTU2604" ]; then
+    echo "26.04"
+  elif [ "$1" = "$UBUNTU2404" ]; then
     echo "24.04"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "22.04"
@@ -99,7 +104,7 @@ get_dist_num()
 # Gets the basic distribution type ubuntu, debian etc
 get_dist_type()
 {
-  if [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
+  if [ "$1" = "$UBUNTU2604" ] || [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
     echo "ubuntu"
   elif  [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
     echo "debian"
@@ -123,7 +128,9 @@ check_docker_and_compose()
   # Install docker if requested
   if [ "$INSTALL_DOCKER" = "true" ]; then
     curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh ./get-docker.sh
+    # No sudo here: this script already requires root (checked at startup), and an extra
+    # sudo layer adds a redundant use_pty session that newer sudo versions can freeze on
+    sh ./get-docker.sh
   fi
 
   # Check if the docker is installed and running
@@ -175,6 +182,15 @@ hold_package_updates_rpm()
   esac
 }
 
+# Fetches and trusts the IOTech apt repo signing key via a dedicated keyring
+# file. Replaces the deprecated/removed 'apt-key add', which is no longer
+# available on newer distributions (e.g. Ubuntu 26.04).
+setup_iotech_apt_key()
+{
+  sudo mkdir -p "$KEYRINGS_DIR"
+  wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo gpg --batch --yes --dearmor -o "$KEYRINGS_DIR/iotech.gpg"
+}
+
 # Installs the server components
 # Args: Distribution
 install_server()
@@ -215,16 +231,12 @@ install_server()
     apt-get update -qq
     apt-get install -y "$FILE"
   else
-    wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
+    setup_iotech_apt_key
     DIST_NAME=$(get_dist_name "$DIST")
     if [ "$REPOAUTH" != "" ]; then
-      if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-        echo "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
     else
-      if ! grep -q "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-        echo "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
     fi
 
     apt-get update -qq
@@ -321,15 +333,11 @@ install_node()
   check_docker_and_compose
 
   # Setting up repos to access iotech packages
-  wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
+  setup_iotech_apt_key
   if [ "$REPOAUTH" != "" ]; then
-    if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-      echo "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-    fi
+    echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
   else
-    if ! grep -q "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-      echo "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-    fi
+    echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
   fi
 
   show_progress 28
@@ -412,15 +420,11 @@ install_cli_deb()
   show_progress 15
   # check if using local file for dev purposes; skip repo setup if so, the install block below handles it
   if ! test -f "$FILE" ; then
-    wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
+    setup_iotech_apt_key
     if [ "$REPOAUTH" != "" ]; then
-      if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" /etc/apt/sources.list.d/em-iotech-cli.list ;then
-        echo "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" | sudo tee -a /etc/apt/sources.list.d/em-iotech-cli.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" | sudo tee /etc/apt/sources.list.d/em-iotech-cli.list
     else
-      if ! grep -q "deb https://iotech.jfrog.io/artifactory/debian-release all main" /etc/apt/sources.list.d/em-iotech-cli.list ;then
-        echo "deb https://iotech.jfrog.io/artifactory/debian-release all main" | sudo tee -a /etc/apt/sources.list.d/em-iotech-cli.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release all main" | sudo tee /etc/apt/sources.list.d/em-iotech-cli.list
     fi
   fi
   show_progress 25
@@ -693,7 +697,7 @@ if [ "$COMPONENT" = "server" ];then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_server "$OS"
     else
       log "The Edge Manager server components are not supported on $OS - $ARCH"  >&3
@@ -708,7 +712,7 @@ elif [ "$COMPONENT" = "node" ]; then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ]||[ "$ARCH" = "armv7l" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
       install_node "$OS" "$ARCH"
     else
       log "Edge Manager node components are not supported on $OS - $ARCH"  >&3
