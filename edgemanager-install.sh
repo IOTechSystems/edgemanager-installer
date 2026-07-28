@@ -182,6 +182,15 @@ hold_package_updates_rpm()
   esac
 }
 
+# Fetches and trusts the IOTech apt repo signing key via a dedicated keyring
+# file. Replaces the deprecated/removed 'apt-key add', which is no longer
+# available on newer distributions (e.g. Ubuntu 26.04).
+setup_iotech_apt_key()
+{
+  sudo mkdir -p "$KEYRINGS_DIR"
+  wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo gpg --batch --yes --dearmor -o "$KEYRINGS_DIR/iotech.gpg"
+}
+
 # Installs the server components
 # Args: Distribution
 install_server()
@@ -222,16 +231,12 @@ install_server()
     apt-get update -qq
     apt-get install -y "$FILE"
   else
-    wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
+    setup_iotech_apt_key
     DIST_NAME=$(get_dist_name "$DIST")
     if [ "$REPOAUTH" != "" ]; then
-      if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-        echo "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
     else
-      if ! grep -q "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-        echo "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
     fi
 
     apt-get update -qq
@@ -328,15 +333,11 @@ install_node()
   check_docker_and_compose
 
   # Setting up repos to access iotech packages
-  wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
+  setup_iotech_apt_key
   if [ "$REPOAUTH" != "" ]; then
-    if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-      echo "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-    fi
+    echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
   else
-    if ! grep -q "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" /etc/apt/sources.list.d/em-iotech.list ;then
-      echo "deb https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee -a /etc/apt/sources.list.d/em-iotech.list
-    fi
+    echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
   fi
 
   show_progress 28
@@ -419,15 +420,11 @@ install_cli_deb()
   show_progress 15
   # check if using local file for dev purposes; skip repo setup if so, the install block below handles it
   if ! test -f "$FILE" ; then
-    wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo apt-key add -
+    setup_iotech_apt_key
     if [ "$REPOAUTH" != "" ]; then
-      if ! grep -q "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" /etc/apt/sources.list.d/em-iotech-cli.list ;then
-        echo "deb https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" | sudo tee -a /etc/apt/sources.list.d/em-iotech-cli.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev all main" | sudo tee /etc/apt/sources.list.d/em-iotech-cli.list
     else
-      if ! grep -q "deb https://iotech.jfrog.io/artifactory/debian-release all main" /etc/apt/sources.list.d/em-iotech-cli.list ;then
-        echo "deb https://iotech.jfrog.io/artifactory/debian-release all main" | sudo tee -a /etc/apt/sources.list.d/em-iotech-cli.list
-      fi
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release all main" | sudo tee /etc/apt/sources.list.d/em-iotech-cli.list
     fi
   fi
   show_progress 25
