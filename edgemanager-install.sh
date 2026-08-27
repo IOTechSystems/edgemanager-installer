@@ -233,8 +233,8 @@ install_server()
 
   show_progress 30
 
-  USER=$(logname)
-  if [ "$USER" != "root" ]; then
+  USER=$(logname 2>/dev/null || true)
+  if [ -n "$USER" ] && [ "$USER" != "root" ]; then
     if ! grep -q "$USER     ALL=(ALL) NOPASSWD:ALL" /etc/sudoers ;then
       echo "$USER     ALL=(ALL) NOPASSWD:ALL" | sudo EDITOR='tee -a' visudo
     fi
@@ -347,8 +347,8 @@ install_node()
 
   show_progress 28
 
-  USER=$(logname)
-  if [ "$USER" != "root" ]; then
+  USER=$(logname 2>/dev/null || true)
+  if [ -n "$USER" ] && [ "$USER" != "root" ]; then
     if ! grep -q "$USER     ALL=(ALL) NOPASSWD:ALL" /etc/sudoers ;then
       echo "$USER     ALL=(ALL) NOPASSWD:ALL" | sudo EDITOR='tee -a' visudo
     fi
