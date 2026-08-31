@@ -31,7 +31,7 @@ REPOAUTH=""
 INSTALL_DOCKER=false
 
 FORCE_YES=false
-VER="3.2.5.dev"
+VER="3.2.5"
 
 UBUNTU2604="Ubuntu 26.04"
 UBUNTU2404="Ubuntu 24.04"
