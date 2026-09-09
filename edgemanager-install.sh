@@ -36,7 +36,6 @@ VER="3.2.6.dev"
 UBUNTU2604="Ubuntu 26.04"
 UBUNTU2404="Ubuntu 24.04"
 UBUNTU2204="Ubuntu 22.04"
-DEBIAN11="Debian GNU/Linux 11"
 DEBIAN12="Debian GNU/Linux 12"
 
 # docker/compose supported versions
@@ -80,8 +79,6 @@ get_dist_name()
     echo "jammy"
   elif  [ "$1" = "$DEBIAN12" ]; then
     echo "bookworm"
-  elif  [ "$1" = "$DEBIAN11" ]; then
-    echo "bullseye"
   fi
 }
 
@@ -94,8 +91,6 @@ get_dist_num()
     echo "24.04"
   elif [ "$1" = "$UBUNTU2204" ]; then
     echo "22.04"
-  elif  [ "$1" = "$DEBIAN11" ]; then
-    echo "11"
   elif  [ "$1" = "$DEBIAN12" ]; then
     echo "12"
   fi
@@ -106,7 +101,7 @@ get_dist_type()
 {
   if [ "$1" = "$UBUNTU2604" ] || [ "$1" = "$UBUNTU2404" ] || [ "$1" = "$UBUNTU2204" ]; then
     echo "ubuntu"
-  elif  [ "$1" = "$DEBIAN11" ] || [ "$1" = "$DEBIAN12" ]; then
+  elif  [ "$1" = "$DEBIAN12" ]; then
     echo "debian"
   fi
 }
@@ -697,7 +692,7 @@ if [ "$COMPONENT" = "server" ];then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN12" ];then
       install_server "$OS"
     else
       log "The Edge Manager server components are not supported on $OS - $ARCH"  >&3
@@ -712,7 +707,7 @@ elif [ "$COMPONENT" = "node" ]; then
   fi
 
   if [ "$ARCH" = "x86_64" ]||[ "$ARCH" = "aarch64" ]||[ "$ARCH" = "armv7l" ];then
-    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN11" ]||[ "$OS" = "$DEBIAN12" ];then
+    if [ "$OS" = "$UBUNTU2204" ]||[ "$OS" = "$UBUNTU2404" ]||[ "$OS" = "$UBUNTU2604" ]||[ "$OS" = "$DEBIAN12" ];then
       install_node "$OS" "$ARCH"
     else
       log "Edge Manager node components are not supported on $OS - $ARCH"  >&3
