@@ -29,6 +29,10 @@ FILE=""
 OFFLINE_PROVISION=false
 REPOAUTH=""
 INSTALL_DOCKER=false
+SERVER_URL=""
+SUMS_SHA256=""
+DOWNLOAD_ONLY=false
+LOCAL_DIR=""
 
 FORCE_YES=false
 VER="3.2.7.dev"
@@ -44,6 +48,10 @@ DOCKER_VERSION="25.0.3"
 COMPOSE_VERSION="v2.24.6"
 
 KEYRINGS_DIR="/etc/apt/keyrings"
+
+# Node packages installed from an Edge Manager server are kept here, outside /opt/edgebuilder/node so uninstalling
+# doesn't remove them, so an upgrade can roll back to the previous version without network access
+NODE_PACKAGES_DIR="/var/lib/edgemanager/packages"
 
 # Checks that the kernel is compatible with Golang
 version_under_2_6_32(){
@@ -127,7 +135,11 @@ check_docker_and_compose()
 {
   # Install docker if requested
   if [ "$INSTALL_DOCKER" = "true" ]; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
+    # Bounded so an offline machine fails with an error rather than hanging
+    if ! curl -fsSL --connect-timeout 30 --max-time 300 --retry 2 https://get.docker.com -o get-docker.sh; then
+      log "Unable to download the Docker install script from https://get.docker.com, check this machine has internet access or install docker version "$DOCKER_VERSION" (or later) before running the installer" >&3
+      exit 1
+    fi
     # No sudo here: this script already requires root (checked at startup), and an extra
     # sudo layer adds a redundant use_pty session that newer sudo versions can freeze on
     sh ./get-docker.sh
@@ -185,10 +197,126 @@ hold_package_updates_rpm()
 # Fetches and trusts the IOTech apt repo signing key via a dedicated keyring
 # file. Replaces the deprecated/removed 'apt-key add', which is no longer
 # available on newer distributions (e.g. Ubuntu 26.04).
+# The download is bounded so an offline machine fails with an error rather than hanging. A failure is only fatal
+# when installing from the IOTech repo; a local package (-f) doesn't need the key.
 setup_iotech_apt_key()
 {
   sudo mkdir -p "$KEYRINGS_DIR"
-  wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo gpg --batch --yes --dearmor -o "$KEYRINGS_DIR/iotech.gpg"
+  KEY_URL="https://iotech.jfrog.io/iotech/api/gpg/key/public"
+  KEY_FILE=$(mktemp)
+  if ! wget -q --timeout=30 --tries=3 -O "$KEY_FILE" "$KEY_URL"; then
+    rm -f "$KEY_FILE"
+    if [ -n "$FILE" ]; then
+      log "WARNING: Unable to download the IOTech package signing key from $KEY_URL, continuing with local package $FILE" >&3
+      return 0
+    fi
+    log "Unable to download the IOTech package signing key from $KEY_URL, check this machine can reach iotech.jfrog.io" >&3
+    exit 1
+  fi
+  sudo gpg --batch --yes --dearmor -o "$KEYRINGS_DIR/iotech.gpg" "$KEY_FILE"
+  rm -f "$KEY_FILE"
+}
+
+# Downloads a file from the Edge Manager server, with timeouts so an unreachable server fails rather than hangs. The
+# server commonly has a self-signed certificate, so TLS isn't verified; downloads are checked against SHA256SUMS.
+# Args: URL, destination file
+server_download()
+{
+  wget -q --timeout=30 --tries=2 --no-check-certificate -O "$2" "$1"
+}
+
+# Checks the node packages in a directory against the SHA256SUMS file in it
+# Args: Directory
+verify_package_dir()
+{
+  if [ ! -f "$1/SHA256SUMS" ]; then
+    log "WARNING: no SHA256SUMS in $1, the node packages are not verified" >&3
+  elif ! (cd "$1" && sha256sum -c --quiet SHA256SUMS); then
+    log "The node packages in $1 do not match their checksums" >&3
+    exit 1
+  fi
+}
+
+# Downloads this node's packages from the Edge Manager server's node-components bundle into the package cache and
+# verifies them. Already-cached packages that still match are reused. Sets PACKAGE_DIR, NODE_DEB and NODE_VER.
+# Args: Distribution codename, Architecture
+download_server_packages()
+{
+  SUMS_FILE=$(mktemp)
+  if ! server_download "$SERVER_URL/SHA256SUMS" "$SUMS_FILE"; then
+    rm -f "$SUMS_FILE"
+    log "Unable to download $SERVER_URL/SHA256SUMS, check this machine can reach the Edge Manager server" >&3
+    exit 1
+  fi
+  if [ -n "$SUMS_SHA256" ]; then
+    if ! echo "$SUMS_SHA256  $SUMS_FILE" | sha256sum -c --quiet -; then
+      rm -f "$SUMS_FILE"
+      log "The node package list from the Edge Manager server does not match this provision command - generate a new provision command" >&3
+      exit 1
+    fi
+  else
+    log "WARNING: no --sums-sha256 given, the node package list from the Edge Manager server is not verified" >&3
+  fi
+
+  PACKAGE_PATH="packages/$1/$2/"
+  PACKAGE_SUMS=$(grep "  $PACKAGE_PATH" "$SUMS_FILE")
+  rm -f "$SUMS_FILE"
+  NODE_DEB=$(echo "$PACKAGE_SUMS" | sed -n "s|.*  $PACKAGE_PATH\(edgemanager-node-.*\.deb\)\$|\1|p")
+  if [ -z "$NODE_DEB" ]; then
+    log "The Edge Manager server has no node packages for $1 $2" >&3
+    exit 1
+  fi
+  NODE_VER=$(echo "$NODE_DEB" | sed 's/^edgemanager-node-\(.*\)_[^_]*\.deb$/\1/')
+
+  PACKAGE_DIR="$NODE_PACKAGES_DIR/$NODE_VER"
+  mkdir -p "$PACKAGE_DIR"
+  echo "$PACKAGE_SUMS" | sed "s|  $PACKAGE_PATH|  |" > "$PACKAGE_DIR/SHA256SUMS"
+  if (cd "$PACKAGE_DIR" && sha256sum -c --quiet SHA256SUMS) > /dev/null 2>&1; then
+    log "Using node packages ($NODE_VER) already downloaded to $PACKAGE_DIR" >&3
+    return
+  fi
+  log "Downloading node packages ($NODE_VER) from the Edge Manager server" >&3
+  for DEB in $(awk '{print $2}' "$PACKAGE_DIR/SHA256SUMS"); do
+    if ! server_download "$SERVER_URL/$PACKAGE_PATH$DEB" "$PACKAGE_DIR/$DEB"; then
+      log "Unable to download $SERVER_URL/$PACKAGE_PATH$DEB, check this machine can reach the Edge Manager server" >&3
+      exit 1
+    fi
+  done
+  verify_package_dir "$PACKAGE_DIR"
+}
+
+# Lists the dependencies of a node package that aren't installed, other than the IOTech packages bundled with it
+# Args: edgemanager-node deb
+missing_node_dependencies()
+{
+  for DEP in $(dpkg-deb -f "$1" Depends | tr ',' '\n' | sed 's/(.*)//; s/|.*//; s/[[:space:]]//g' | grep -v '^iotech-'); do
+    dpkg -s "$DEP" 2>/dev/null | grep -q '^Status: install ok installed' || echo "$DEP"
+  done
+}
+
+# Checks a node package's dependencies are installed, installing missing ones from the distro's package sources
+# unless only checking, so a node without network access gets a clear error before anything is changed
+# Args: edgemanager-node deb, "check" to only check
+check_node_dependencies()
+{
+  MISSING=$(missing_node_dependencies "$1")
+  if [ -n "$MISSING" ] && [ "$2" != "check" ]; then
+    log "Installing packages required by the node components: $(echo $MISSING)" >&3
+    apt-get install -y -qq $MISSING
+    MISSING=$(missing_node_dependencies "$1")
+  fi
+  if [ -n "$MISSING" ]; then
+    log "Missing packages required by the node components: $(echo $MISSING) - install them, or make a package mirror available, and try again" >&3
+    exit 1
+  fi
+}
+
+# Keeps the two most recently used package versions in the cache: the installed one and the previous one, for rollback
+prune_package_cache()
+{
+  ls -1t "$NODE_PACKAGES_DIR" | tail -n +3 | while read -r OLD_VER; do
+    rm -rf "${NODE_PACKAGES_DIR:?}/$OLD_VER"
+  done
 }
 
 # Installs the server components
@@ -273,7 +401,34 @@ install_node()
   DIST=$1
   ARCH=$2
 
-  log "Starting node ($VER) install on $DIST - $ARCH" >&3
+  # Ahead of an upgrade, on a node that still has the old version installed: fetch and verify the new packages and
+  # check their dependencies, without installing anything, so the upgrade can stop before removing the old version
+  if [ "$DOWNLOAD_ONLY" = "true" ]; then
+    if [ -z "$SERVER_URL" ]; then
+      log "--download-only needs --server" >&3
+      exit 1
+    fi
+    download_server_packages "$(get_dist_name "$DIST")" "$(get_dist_arch "$ARCH")"
+    check_node_dependencies "$PACKAGE_DIR/$NODE_DEB" check
+    log "Node packages ($NODE_VER) downloaded to $PACKAGE_DIR" >&3
+    exit 0
+  fi
+
+  # Packages come from the Edge Manager server's node-components bundle (or a local copy of one) rather than the
+  # IOTech repo. Package source lookups are bounded so a node without network access doesn't stall on them.
+  APT_UPDATE_OPTS=""
+  if [ -n "$SERVER_URL" ] || [ -n "$LOCAL_DIR" ]; then
+    APT_UPDATE_OPTS="-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+  fi
+
+  # With packages from a server bundle or local directory, the version installed is theirs, not this script's VER
+  if [ -n "$SERVER_URL" ]; then
+    log "Starting node install on $DIST - $ARCH, from the Edge Manager server" >&3
+  elif [ -n "$LOCAL_DIR" ]; then
+    log "Starting node install on $DIST - $ARCH, from $LOCAL_DIR" >&3
+  else
+    log "Starting node ($VER) install on $DIST - $ARCH" >&3
+  fi
     show_progress 1
   if dpkg -l | grep -qw edgemanager-node ;then
     # shellcheck disable=SC2062
@@ -319,7 +474,7 @@ install_node()
   fi
 
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
+  apt-get update -qq $APT_UPDATE_OPTS
   apt-get install -y -qq wget ca-certificates curl gnupg lsb-release gettext-base
 
   show_progress 5
@@ -332,12 +487,30 @@ install_node()
   show_progress 10
   check_docker_and_compose
 
-  # Setting up repos to access iotech packages
-  setup_iotech_apt_key
-  if [ "$REPOAUTH" != "" ]; then
-    echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
+  PACKAGE_DIR=""
+  if [ -n "$SERVER_URL" ]; then
+    download_server_packages "$DIST_NAME" "$DIST_ARCH"
+  elif [ -n "$LOCAL_DIR" ]; then
+    PACKAGE_DIR="$LOCAL_DIR"
+    verify_package_dir "$PACKAGE_DIR"
+    NODE_DEB=$(cd "$PACKAGE_DIR" && ls edgemanager-node-*.deb 2>/dev/null | head -1)
+    if [ -z "$NODE_DEB" ]; then
+      log "No edgemanager-node package in $PACKAGE_DIR" >&3
+      exit 1
+    fi
+    NODE_VER=$(echo "$NODE_DEB" | sed 's/^edgemanager-node-\(.*\)_[^_]*\.deb$/\1/')
+    log "Installing node packages ($NODE_VER) from $PACKAGE_DIR" >&3
   else
-    echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
+    # Setting up repos to access iotech packages
+    setup_iotech_apt_key
+    if [ "$REPOAUTH" != "" ]; then
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://$REPOAUTH@iotech.jfrog.io/artifactory/debian-dev $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
+    else
+      echo "deb [signed-by=$KEYRINGS_DIR/iotech.gpg] https://iotech.jfrog.io/artifactory/debian-release $DIST_NAME main" | sudo tee /etc/apt/sources.list.d/em-iotech.list
+    fi
+  fi
+  if [ -n "$PACKAGE_DIR" ]; then
+    check_node_dependencies "$PACKAGE_DIR/$NODE_DEB"
   fi
 
   show_progress 28
@@ -346,11 +519,16 @@ install_node()
 
   # check if using local file for dev purposes
   echo "FILE = ${FILE}"
-  apt-get update -qq
-  if test -f "$FILE" ; then
-    apt-get install -y "$FILE"
+  if [ -n "$PACKAGE_DIR" ]; then
+    # Dependencies were checked above, so no package source lookup is needed
+    apt-get install -y "$PACKAGE_DIR"/*.deb
   else
-    apt-get install -y -qq edgemanager-node="$VER"
+    apt-get update -qq
+    if test -f "$FILE" ; then
+      apt-get install -y "$FILE"
+    else
+      apt-get install -y -qq edgemanager-node="$VER"
+    fi
   fi
 
   show_progress 28
@@ -379,6 +557,11 @@ install_node()
     log "Node installation could not be validated" >&3
   else
     log "Node validation succeeded" >&3
+    # Mark these packages as the most recently used, and keep only them and the previous version
+    if [ "$PACKAGE_DIR" = "$NODE_PACKAGES_DIR/${PACKAGE_DIR##*/}" ]; then
+      touch "$PACKAGE_DIR"
+      prune_package_cache
+    fi
   fi
 
   # Hold package updates
@@ -606,6 +789,11 @@ display_usage()
   echo "     --offline-provision      : Enable offline node provision" >&3
   echo "     --install-docker         : Install docker as part of package install" >&3
   echo "     -y, --yes                : Automatically proceed without interactive prompts" >&3
+  echo "     --server <url>           : (node) Install the packages from an Edge Manager server's node-components" >&3
+  echo "                                bundle, e.g. https://<server>/node-components, instead of the IoTech repo" >&3
+  echo "     --sums-sha256 <sha>      : (node) Expected sha256 of the server's SHA256SUMS package list" >&3
+  echo "     --download-only          : (node) With --server, download and verify the packages without installing" >&3
+  echo "     --local-dir <dir>        : (node) Install the packages from a local directory, e.g. a cached version" >&3
 }
 
 ## Main starts here: ##
@@ -640,6 +828,25 @@ while [ "$1" != "" ]; do
             ;;
         -y | --yes)
             FORCE_YES=true
+            shift
+            ;;
+        --server)
+            SERVER_URL="${2%/}"
+            shift
+            shift
+            ;;
+        --sums-sha256)
+            SUMS_SHA256="$2"
+            shift
+            shift
+            ;;
+        --download-only)
+            DOWNLOAD_ONLY=true
+            shift
+            ;;
+        --local-dir)
+            LOCAL_DIR="${2%/}"
+            shift
             shift
             ;;
         *)
