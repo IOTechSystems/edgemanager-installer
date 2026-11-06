@@ -35,7 +35,7 @@ DOWNLOAD_ONLY=false
 LOCAL_DIR=""
 
 FORCE_YES=false
-VER="3.3.0.dev"
+VER="3.3.1.dev"
 
 UBUNTU2604="Ubuntu 26.04"
 UBUNTU2404="Ubuntu 24.04"
