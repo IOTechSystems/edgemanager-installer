@@ -127,7 +127,11 @@ check_docker_and_compose()
 {
   # Install docker if requested
   if [ "$INSTALL_DOCKER" = "true" ]; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
+    # Bounded so an offline machine fails with an error rather than hanging
+    if ! curl -fsSL --connect-timeout 30 --max-time 300 --retry 2 https://get.docker.com -o get-docker.sh; then
+      log "Unable to download the Docker install script from https://get.docker.com, check this machine has internet access or install docker version "$DOCKER_VERSION" (or later) before running the installer" >&3
+      exit 1
+    fi
     # No sudo here: this script already requires root (checked at startup), and an extra
     # sudo layer adds a redundant use_pty session that newer sudo versions can freeze on
     sh ./get-docker.sh
@@ -185,10 +189,24 @@ hold_package_updates_rpm()
 # Fetches and trusts the IOTech apt repo signing key via a dedicated keyring
 # file. Replaces the deprecated/removed 'apt-key add', which is no longer
 # available on newer distributions (e.g. Ubuntu 26.04).
+# The download is bounded so an offline machine fails with an error rather than hanging. A failure is only fatal
+# when installing from the IOTech repo; a local package (-f) doesn't need the key.
 setup_iotech_apt_key()
 {
   sudo mkdir -p "$KEYRINGS_DIR"
-  wget -q -O - https://iotech.jfrog.io/iotech/api/gpg/key/public | sudo gpg --batch --yes --dearmor -o "$KEYRINGS_DIR/iotech.gpg"
+  KEY_URL="https://iotech.jfrog.io/iotech/api/gpg/key/public"
+  KEY_FILE=$(mktemp)
+  if ! wget -q --timeout=30 --tries=3 -O "$KEY_FILE" "$KEY_URL"; then
+    rm -f "$KEY_FILE"
+    if [ -n "$FILE" ]; then
+      log "WARNING: Unable to download the IOTech package signing key from $KEY_URL, continuing with local package $FILE" >&3
+      return 0
+    fi
+    log "Unable to download the IOTech package signing key from $KEY_URL, check this machine can reach iotech.jfrog.io" >&3
+    exit 1
+  fi
+  sudo gpg --batch --yes --dearmor -o "$KEYRINGS_DIR/iotech.gpg" "$KEY_FILE"
+  rm -f "$KEY_FILE"
 }
 
 # Installs the server components
